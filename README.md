@@ -32,14 +32,3 @@ WeatherSky uses the **OpenWeatherMap API** to display current weather informatio
 ## 📸 Screenshot
 
 <img width="1920" height="1080" alt="Screenshot 2026-09-20 200918" src="https://github.com/user-attachments/assets/e53053e8-36d9-46d8-b248-8f00fbdf2202" />
-
-# Exe File
-
-
-
-
-
-
-
-```markdown
-![WeatherSky Screenshot](screenshot.png)
