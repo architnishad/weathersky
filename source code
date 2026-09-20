@@ -9,7 +9,7 @@ from PIL import Image
 # API SETTINGS
 # =========================
 
-API_KEY = "68418ce436132483c0bce07db5b9f435"
+API_KEY = "put your api key"
 BASE_URL = "https://api.openweathermap.org/data/2.5"
 
 
