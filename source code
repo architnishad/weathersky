@@ -1,0 +1,623 @@
+from datetime import datetime
+from io import BytesIO
+import customtkinter as ctk
+import requests
+from PIL import Image
+
+
+# =========================
+# API SETTINGS
+# =========================
+
+API_KEY = "68418ce436132483c0bce07db5b9f435"
+BASE_URL = "https://api.openweathermap.org/data/2.5"
+
+
+# =========================
+# CITY LIST
+# =========================
+
+city_list = [
+    "Delhi", "Mumbai", "Kolkata", "Chennai", "Bengaluru", "Hyderabad",
+    "Pune", "Ahmedabad", "Jaipur", "Chandigarh", "Lucknow", "Kanpur",
+    "Agra", "Varanasi", "Patna", "Ranchi", "Bhopal", "Indore", "Gwalior",
+    "Raipur", "Bhubaneswar", "Cuttack", "Rourkela", "Visakhapatnam",
+    "Vijayawada", "Guntur", "Tirupati", "Warangal", "Nizamabad",
+    "Karimnagar", "Nagpur", "Nashik", "Aurangabad", "Solapur", "Kolhapur",
+    "Amritsar", "Ludhiana", "Jalandhar", "Patiala", "Shimla", "Manali",
+    "Dehradun", "Haridwar", "Rishikesh", "Meerut", "Noida", "Ghaziabad",
+    "Faridabad", "Gurgaon", "Panaji", "Margao", "Kochi",
+    "Thiruvananthapuram", "Kozhikode", "Thrissur", "Coimbatore", "Madurai",
+    "Salem", "Erode", "Tiruchirappalli", "Tirunelveli", "Thoothukudi",
+    "Puducherry", "Karaikal", "Aizawl", "Imphal", "Shillong", "Guwahati",
+    "Silchar", "Dibrugarh", "Itanagar", "Kohima", "Dimapur", "Agartala",
+    "Gangtok", "Port Blair", "Leh", "Srinagar", "Jammu", "Kargil"
+]
+
+
+# =========================
+# APP SETTINGS
+# =========================
+
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
+
+
+# =========================
+# GET WEATHER DATA
+# =========================
+
+def request_data(endpoint, city_name):
+    response = requests.get(
+        f"{BASE_URL}/{endpoint}",
+        params={
+            "q": city_name,
+            "appid": API_KEY,
+            "units": "metric"
+        },
+        timeout=10
+    )
+
+    data = response.json()
+
+    if response.status_code != 200:
+        raise ValueError(
+            data.get("message", "Request failed")
+        )
+
+    return data
+
+
+# =========================
+# WEATHER ICON
+# =========================
+
+def weather_icon(icon_code, size):
+    url = f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
+
+    response = requests.get(
+        url,
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+    image = Image.open(
+        BytesIO(response.content)
+    )
+
+    return ctk.CTkImage(
+        light_image=image,
+        dark_image=image,
+        size=size
+    )
+
+
+# =========================
+# GET WEATHER
+# =========================
+
+def get_weather():
+
+    selected_city = city_entry.get().strip()
+
+    if not selected_city:
+        message_label.configure(
+            text="Please select or enter a city",
+            text_color="red"
+        )
+        return
+
+    try:
+        current_data = request_data(
+            "weather",
+            selected_city
+        )
+
+        update_current_weather(
+            current_data
+        )
+
+        update_forecast(
+            selected_city
+        )
+
+        message_label.configure(
+            text="Weather updated successfully",
+            text_color="green"
+        )
+
+    except ValueError:
+        message_label.configure(
+            text="City not found",
+            text_color="red"
+        )
+
+    except requests.RequestException:
+        message_label.configure(
+            text="Internet connection error",
+            text_color="red"
+        )
+
+
+# =========================
+# CURRENT WEATHER
+# =========================
+
+def update_current_weather(data):
+
+    main = data["main"]
+    weather = data["weather"][0]
+    system = data["sys"]
+
+    location_label.configure(
+        text=f"{data['name']}, {system['country']}"
+    )
+
+    temperature_label.configure(
+        text=f"{main['temp']:.0f}°C"
+    )
+
+    weather_label.configure(
+        text=weather["main"]
+    )
+
+    description_label.configure(
+        text=weather["description"].title()
+    )
+
+    humidity_label.configure(
+        text=f"Humidity: {main['humidity']}%"
+    )
+
+    wind_label.configure(
+        text=f"Wind: {data['wind']['speed']} m/s"
+    )
+
+    pressure_label.configure(
+        text=f"Pressure: {main['pressure']} hPa"
+    )
+
+    feels_label.configure(
+        text=f"Feels Like: {main['feels_like']:.0f}°C"
+    )
+
+    sunrise_label.configure(
+        text=f"Sunrise: "
+             f"{datetime.fromtimestamp(system['sunrise']):%I:%M %p}"
+    )
+
+    sunset_label.configure(
+        text=f"Sunset: "
+             f"{datetime.fromtimestamp(system['sunset']):%I:%M %p}"
+    )
+
+    icon_label.configure(
+        image=weather_icon(
+            weather["icon"],
+            (100, 100)
+        ),
+        text=""
+    )
+
+
+# =========================
+# 5-DAY FORECAST
+# =========================
+
+def update_forecast(city_name):
+
+    data = request_data(
+        "forecast",
+        city_name
+    )
+
+    # Remove old forecast cards
+    for widget in forecast_frame.winfo_children():
+        widget.destroy()
+
+    # Select one forecast around 12 PM for each day
+    days = [
+        item
+        for item in data["list"]
+        if "12:00:00" in item["dt_txt"]
+    ][:5]
+
+    for item in days:
+        create_card(item)
+
+
+# =========================
+# FORECAST CARD
+# =========================
+
+def create_card(data):
+
+    card = ctk.CTkFrame(
+        forecast_frame,
+        width=200,
+        height=240,
+        corner_radius=15,
+        fg_color="white"
+    )
+
+    card.pack(
+        side="left",
+        expand=True,
+        fill="both",
+        padx=6
+    )
+
+    main = data["main"]
+    weather = data["weather"][0]
+
+    # Date
+    ctk.CTkLabel(
+        card,
+        text=datetime.fromtimestamp(
+            data["dt"]
+        ).strftime("%a\n%d %b"),
+        font=("Arial", 18, "bold"),
+        text_color="black"
+    ).pack(
+        pady=8
+    )
+
+    # Weather icon
+    ctk.CTkLabel(
+        card,
+        image=weather_icon(
+            weather["icon"],
+            (65, 65)
+        ),
+        text=""
+    ).pack()
+
+    # Temperature
+    ctk.CTkLabel(
+        card,
+        text=f"{main['temp']:.0f}°C",
+        font=("Arial", 26, "bold"),
+        text_color="#1976D2"
+    ).pack(
+        pady=2
+    )
+
+    # Weather condition
+    ctk.CTkLabel(
+        card,
+        text=weather["main"],
+        font=("Arial", 16),
+        text_color="black"
+    ).pack()
+
+    # Humidity
+    ctk.CTkLabel(
+        card,
+        text=f"Humidity: {main['humidity']}%",
+        font=("Arial", 16),
+        text_color="black"
+    ).pack(
+        pady=4
+    )
+
+
+# =========================
+# MAIN WINDOW
+# =========================
+
+win = ctk.CTk()
+
+win.title("WeatherSky")
+win.geometry("1200x700")
+win.minsize(1000, 650)
+
+# Light blue background
+win.configure(
+    fg_color="Sky blue"
+)
+
+
+# =========================
+# TITLE
+# =========================
+
+ctk.CTkLabel(
+    win,
+    text="WeatherSky",
+    font=("Arial", 32, "bold"),
+    text_color="#1976D2"
+).pack(
+    pady=(20, 5)
+)
+
+
+# =========================
+# SUBTITLE
+# =========================
+
+ctk.CTkLabel(
+    win,
+    text="Weather Application using OpenWeatherMap API",
+    font=("Arial", 18),
+    text_color="black"
+).pack()
+
+
+# =========================
+# SEARCH AREA
+# =========================
+
+search_frame = ctk.CTkFrame(
+    win,
+    fg_color="transparent"
+)
+
+search_frame.pack(
+    pady=15
+)
+
+
+city_entry = ctk.CTkComboBox(
+    search_frame,
+    values=city_list,
+    width=450,
+    height=45,
+    font=("Arial", 16),
+    dropdown_font=("Arial", 14)
+)
+
+city_entry.set("Delhi")
+
+city_entry.pack(
+    side="left",
+    padx=5
+)
+
+
+ctk.CTkButton(
+    search_frame,
+    text="Get Weather",
+    width=140,
+    height=45,
+    font=("Arial", 15, "bold"),
+    command=get_weather
+).pack(
+    side="left",
+    padx=5
+)
+
+
+# Press Enter to search
+city_entry.bind(
+    "<Return>",
+    lambda event: get_weather()
+)
+
+
+# =========================
+# MESSAGE
+# =========================
+
+message_label = ctk.CTkLabel(
+    win,
+    text="",
+    font=("Arial", 18),
+    text_color="red"
+)
+
+message_label.pack()
+
+
+# =========================
+# CURRENT WEATHER
+# =========================
+
+current_frame = ctk.CTkFrame(
+    win,
+    width=1130,
+    height=190,
+    corner_radius=20,
+    fg_color="white"
+)
+
+current_frame.pack(
+    padx=30,
+    pady=10,
+    fill="x"
+)
+
+current_frame.pack_propagate(False)
+
+
+# Location
+location_label = ctk.CTkLabel(
+    current_frame,
+    text="Search a city",
+    font=("Arial", 24, "bold"),
+    text_color="black"
+)
+
+location_label.place(
+    x=25,
+    y=15
+)
+
+
+# Weather icon
+icon_label = ctk.CTkLabel(
+    current_frame,
+    text=""
+)
+
+icon_label.place(
+    x=25,
+    y=55
+)
+
+
+# Temperature
+temperature_label = ctk.CTkLabel(
+    current_frame,
+    text="--°C",
+    font=("Arial", 48, "bold"),
+    text_color="#1976D2"
+)
+
+temperature_label.place(
+    x=135,
+    y=65
+)
+
+
+# Weather
+weather_label = ctk.CTkLabel(
+    current_frame,
+    text="Weather",
+    font=("Arial", 24, "bold"),
+    text_color="black"
+)
+
+weather_label.place(
+    x=280,
+    y=65
+)
+
+
+# Description
+description_label = ctk.CTkLabel(
+    current_frame,
+    text="Description",
+    font=("Arial", 18, "bold"),
+    text_color="black"
+)
+
+description_label.place(
+    x=280,
+    y=100
+)
+
+
+# =========================
+# WEATHER DETAILS
+# =========================
+
+humidity_label = ctk.CTkLabel(
+    current_frame,
+    text="Humidity: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+humidity_label.place(
+    x=500,
+    y=50
+)
+
+
+wind_label = ctk.CTkLabel(
+    current_frame,
+    text="Wind: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+wind_label.place(
+    x=700,
+    y=50
+)
+
+
+pressure_label = ctk.CTkLabel(
+    current_frame,
+    text="Pressure: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+pressure_label.place(
+    x=900,
+    y=50
+)
+
+
+feels_label = ctk.CTkLabel(
+    current_frame,
+    text="Feels Like: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+feels_label.place(
+    x=500,
+    y=100
+)
+
+
+# Sunrise
+sunrise_label = ctk.CTkLabel(
+    current_frame,
+    text="Sunrise: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+sunrise_label.place(
+    x=700,
+    y=100
+)
+
+
+# Sunset
+sunset_label = ctk.CTkLabel(
+    current_frame,
+    text="Sunset: --",
+    font=("Arial", 21, "bold"),
+    text_color="black"
+)
+
+sunset_label.place(
+    x=900,
+    y=100
+)
+
+
+# =========================
+# 5-DAY FORECAST TITLE
+# =========================
+
+ctk.CTkLabel(
+    win,
+    text="5-Day Forecast",
+    font=("Arial", 25, "bold"),
+    text_color="black"
+).pack(
+    anchor="w",
+    padx=35,
+    pady=(10, 5)
+)
+
+
+# =========================
+# FORECAST FRAME
+# =========================
+
+forecast_frame = ctk.CTkFrame(
+    win,
+    height=255,
+    fg_color="transparent"
+)
+
+forecast_frame.pack(
+    fill="x",
+    padx=30
+)
+
+forecast_frame.pack_propagate(False)
+
+
+# =========================
+# START APP
+# =========================
+
+win.mainloop()
